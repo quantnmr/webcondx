@@ -1,0 +1,297 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CondX - HF Radio Wave Propagation</title>
+    <link rel="stylesheet" href="style.css">
+    <script src="https://cdn.plot.ly/plotly-2.27.0.min.js"></script>
+    <script src="https://polyfill.io/v3/polyfill.min.js?features=es6"></script>
+    <script id="MathJax-script" async src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
+    <script>
+        window.MathJax = {
+            tex: {
+                inlineMath: [['$', '$'], ['\\(', '\\)']],
+                displayMath: [['$$', '$$'], ['\\[', '\\]']]
+            }
+        };
+    </script>
+    <script src="physics.js"></script>
+    <script src="visualizations.js"></script>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>CondX - HF Radio Wave Propagation</h1>
+            <div class="subtitle">Interactive Ionospheric Propagation Modeling</div>
+        </header>
+        
+        <div class="section">
+            <h2>Understanding HF Radio Wave Propagation Through the Ionosphere</h2>
+            
+            <div class="accordion">
+                <div class="accordion-header" onclick="toggleAccordion()">
+                    <span>📖 Introduction & Physics Background (click to expand)</span>
+                    <span id="accordion-icon">▼</span>
+                </div>
+                <div class="accordion-content" id="accordion-content">
+                    <div style="padding-top: 15px;">
+                        <h3>Interactive Educational Tool</h3>
+                        <p>This tool demonstrates how <strong>High Frequency (HF) radio waves</strong> (1.8-30 MHz) propagate through Earth's ionosphere to enable long-distance communication. Use the interactive visualizations below to explore how different conditions affect radio propagation.</p>
+                        
+                        <hr style="margin: 20px 0; border: none; border-top: 1px solid #ddd;">
+                        
+                        <h3>Key Concepts</h3>
+                        
+                        <p><strong>Ionospheric Skip Propagation:</strong></p>
+                        <ul style="margin-left: 20px; margin-bottom: 15px;">
+                            <li>HF radio waves launched from Earth's surface can <strong>reflect off the ionosphere</strong> (a layer of ionized atmosphere 60-600 km altitude)</li>
+                            <li>The wave "skips" back to Earth at a distant location, enabling over-the-horizon communication</li>
+                            <li>Skip distance depends on <strong>frequency</strong>, <strong>launch angle</strong>, and <strong>ionospheric conditions</strong></li>
+                        </ul>
+                        
+                        <p><strong>Critical Parameters:</strong></p>
+                        <ul style="margin-left: 20px; margin-bottom: 15px;">
+                            <li><strong>foF2 (critical frequency):</strong> Maximum frequency that can be reflected by the F2 layer at vertical incidence
+                                <ul style="margin-left: 20px; margin-top: 5px;">
+                                    <li>Higher foF2 → ionosphere can reflect higher frequencies</li>
+                                    <li>Varies with solar activity, time of day, season (typical range: 2-25 MHz in this model)</li>
+                                    <li><strong>Night</strong> (2-5 MHz): D-layer absent, F1 layer recombines and disappears, F2 layer at higher altitude (260-350 km) due to diffusion and winds</li>
+                                    <li><strong>Dawn/Dusk</strong> (5-10 MHz): D-layer building, F1 layer gradually emerging, F2 transitioning between nighttime and daytime altitudes</li>
+                                    <li><strong>Day</strong> (10-25 MHz): All layers present, F2 layer at lower altitude (250-300 km) due to photoionization near peak</li>
+                                </ul>
+                            </li>
+                            <li><strong>Elevation angle:</strong> Launch angle of the radio wave above the horizon
+                                <ul style="margin-left: 20px; margin-top: 5px;">
+                                    <li>Low angles (5-20°) → long skip distances (2000+ km)</li>
+                                    <li>High angles (60-85°) → short skip distances (&lt; 500 km)</li>
+                                </ul>
+                            </li>
+                        </ul>
+                        
+                        <hr style="margin: 20px 0; border: none; border-top: 1px solid #ddd;">
+                        
+                        <h3>The Physics Behind the Model</h3>
+                        
+                        <h4>1. Refractive Index (Wave Bending &amp; Absorption)</h4>
+                        <p>The complex refractive index determines both wave bending and absorption using the <strong>Appleton-Hartree equation</strong>:</p>
+                        <div style="text-align: center; margin: 15px 0;">
+                            $$n^2 = 1 - \frac{X}{1 - jZ}$$
+                        </div>
+                        <p>where:</p>
+                        <ul style="margin-left: 20px; margin-bottom: 15px;">
+                            <li>$X = (\omega_p/\omega)^2$ = normalized plasma frequency (depends on electron density)</li>
+                            <li>$Z = \nu/\omega$ = normalized collision frequency (determines absorption)</li>
+                            <li>$\omega_p = 2\pi \cdot 8.98 \times 10^3 \sqrt{N_e}$ (plasma frequency from electron density $N_e$)</li>
+                            <li>$\nu(z)$ = altitude-dependent electron-neutral collision frequency</li>
+                        </ul>
+                        
+                        <h4>2. Snell's Law in Spherical Coordinates</h4>
+                        <p>This model uses <strong>spherical geometry</strong> to account for Earth's curvature. The <strong>ray parameter</strong> $b = n \cdot r \cdot \sin(\psi)$ is conserved along the ray path, where:</p>
+                        <ul style="margin-left: 20px; margin-bottom: 15px;">
+                            <li>$n$ = refractive index</li>
+                            <li>$r$ = radial distance from Earth's center</li>
+                            <li>$\psi$ = angle between ray and radial direction</li>
+                        </ul>
+                        <p>As waves travel into regions of higher electron density, $n$ decreases. To conserve $b$, the ray bends. When $n^2 &lt; 0$, the wave reflects back toward Earth. Skip distances are measured along the curved Earth's surface, not as straight-line distances.</p>
+                        
+                        <h4>3. Absorption Loss (Sen-Wyller Formula)</h4>
+                        <p>Radio waves lose energy through collisions. The absorption coefficient is:</p>
+                        <div style="text-align: center; margin: 15px 0;">
+                            $$\alpha = \frac{\omega}{2c} \cdot \frac{|\text{Im}(n^2)|}{\text{Re}(n)}$$
+                        </div>
+                        <p>Total path loss: $\text{Loss (dB)} = 8.686 \int \alpha(s) \, ds$</p>
+                        <p>Key behaviors (calibrated to match real-world measurements):</p>
+                        <ul style="margin-left: 20px; margin-bottom: 15px;">
+                            <li><strong>Lower frequencies</strong> (1.8-7 MHz) suffer <strong>more absorption</strong> in D-layer (∝ 1/f²)</li>
+                            <li><strong>Mid-HF</strong> (14-21 MHz) has <strong>lowest loss</strong> for long-distance paths</li>
+                            <li><strong>D-layer</strong> (70-90 km) causes most absorption due to high collision frequency</li>
+                        </ul>
+                        
+                        <h4>4. Chapman Layer Electron Density</h4>
+                        <p>Each ionospheric layer (D, E, F1, F2) uses the <strong>Chapman function</strong>:</p>
+                        <div style="text-align: center; margin: 15px 0;">
+                            $$N_e(z) = N_{max} \exp\left[\frac{1}{2}\left(1 - \xi - e^{-\xi}\right)\right]$$
+                        </div>
+                        <p>where $\xi = (z - h_m)/H$ with $h_m$ = peak altitude, $H$ = scale height.</p>
+                        <p><strong>Nighttime behavior:</strong> At night (low foF2), the F1 layer recombines quickly and disappears, leaving only a single broadened F layer. The F2 peak altitude (hmF2) is higher at night (260-350 km) due to diffusion and neutral winds, while during the day it's lower (250-300 km) due to photoionization near the peak.</p>
+                        
+                        <hr style="margin: 20px 0; border: none; border-top: 1px solid #ddd;">
+                        
+                        <h3>How to Use This Tool</h3>
+                        <p><strong>This tool includes two models:</strong></p>
+                        
+                        <h4>1D Model (Vertical Variations Only)</h4>
+                        <ol style="margin-left: 20px; margin-bottom: 15px;">
+                            <li><strong>Electron Density Profile</strong> - Shows how electron density varies with altitude across the ionospheric layers (D, E, F1, F2). Note that F1 disappears at night (foF2 &lt; 4.5 MHz), and D disappears at very low foF2.</li>
+                            <li><strong>Plasma Frequency Profile</strong> - Shows the plasma frequency as a function of altitude, with the foF2 reference line indicating the maximum frequency that can be reflected vertically</li>
+                            <li><strong>Interactive Controls</strong> - Sliders to adjust foF2 (ionospheric conditions) and elevation angle (launch angle)</li>
+                            <li><strong>Ray Path Visualization</strong> - Shows how radio waves at different frequencies propagate through the ionosphere</li>
+                            <li><strong>Signal Loss Analysis</strong> - Displays absorption loss for each frequency with color-coded signal strength</li>
+                        </ol>
+                        <p><strong>Try experimenting with the sliders to see:</strong></p>
+                        <ul style="margin-left: 20px; margin-bottom: 15px;">
+                            <li>How higher foF2 allows higher frequencies to propagate</li>
+                            <li>How lower elevation angles create longer skip distances</li>
+                            <li>Why some frequencies work better than others (lower absorption loss)</li>
+                            <li>How rays at different frequencies bend differently through the ionosphere</li>
+                        </ul>
+                        
+                        <h4>2D Model (Horizontal Gradients)</h4>
+                        <p>The 2D model extends the 1D model to include <strong>horizontal ionospheric gradients</strong> that create fascinating propagation effects:</p>
+                        <ol style="margin-left: 20px; margin-bottom: 15px;">
+                            <li><strong>Ionospheric Tilts</strong> - Model horizontal foF2 variations (day/night terminator, etc.). The gradient display shows how foF2 changes along the propagation path.</li>
+                            <li><strong>Side View and Top View</strong> - Two visualizations showing ray paths from the side (altitude vs. distance) and from above (azimuth deflection vs. distance)</li>
+                            <li><strong>Off-Great-Circle Propagation</strong> - Visualize how rays bend sideways when encountering horizontal gradients, causing azimuth deflection</li>
+                            <li><strong>2D Absorption Loss</strong> - See how signal strength varies through the tilted ionosphere, with bar charts showing total loss for each frequency</li>
+                        </ol>
+                        <p><strong>Try experimenting with the 2D sliders to see:</strong></p>
+                        <ul style="margin-left: 20px; margin-bottom: 15px;">
+                            <li>Day/night terminator effects (15 MHz → 4 MHz over 3000 km)</li>
+                            <li>Off-great-circle propagation (sideways ray bending shown in the top view)</li>
+                            <li>How horizontal gradients affect absorption loss</li>
+                            <li>Pedersen ray behavior with high elevation angles</li>
+                            <li>How the gradient distance affects the rate of change in ionospheric conditions</li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Tab Navigation -->
+        <div class="tabs">
+            <button class="tab-button active" onclick="switchTab('tab-1d', this)">1D Model</button>
+            <button class="tab-button" onclick="switchTab('tab-2d', this)">2D Model</button>
+        </div>
+        
+        <!-- Tab 1: 1D Model -->
+        <div id="tab-1d" class="tab-content active">
+        <div class="section">
+            <h2>1D Ionospheric Model</h2>
+            
+            <div class="info-box">
+                <strong>The Ionosphere:</strong> The ionosphere consists of four layers (D, E, F1, F2) at altitudes of 60-600 km. 
+                The F2 layer is most important for HF propagation, with its critical frequency (foF2) controlling which frequencies can be reflected.
+            </div>
+            
+            <div class="controls">
+                <div class="control-group">
+                    <label>
+                        <span>foF2 (Critical Frequency)</span>
+                        <span class="value-display" id="foF2-value">12.0 MHz</span>
+                    </label>
+                    <input type="range" id="foF2-slider" min="2" max="25" step="0.1" value="12">
+                </div>
+            </div>
+            
+            <div id="condition-indicator" class="condition-indicator"></div>
+            
+            <h3>Electron Density & Plasma Frequency</h3>
+            <div style="display: flex; gap: 20px;">
+                <div class="chart-container" style="flex: 1;">
+                    <div id="density-chart" style="width:100%;height:500px;"></div>
+                </div>
+                <div class="chart-container" style="flex: 1;">
+                    <div id="plasma-chart" style="width:100%;height:500px;"></div>
+                </div>
+            </div>
+            
+            <div class="controls" style="margin-top: 20px;">
+                <div class="control-group">
+                    <label>
+                        <span>Elevation Angle</span>
+                        <span class="value-display" id="elevation-value">30°</span>
+                    </label>
+                    <input type="range" id="elevation-slider" min="1" max="89" step="1" value="30">
+                </div>
+            </div>
+            
+            <h3>Ray Path Visualization</h3>
+            <div class="chart-container">
+                <div id="raypath-chart" style="width:100%;height:500px;"></div>
+            </div>
+            
+            <h3>Signal Loss by Frequency</h3>
+            <div class="chart-container">
+                <div id="absorption-chart" style="width:100%;height:800px;"></div>
+            </div>
+        </div>
+        </div>
+        
+        <!-- Tab 2: 2D Model -->
+        <div id="tab-2d" class="tab-content" style="display: none;">
+        <div class="section">
+            <h2>2D Model with Ionospheric Tilts</h2>
+            
+            <div class="info-box">
+                <strong>Ionospheric Tilts:</strong> Horizontal gradients in electron density (such as the day/night terminator) 
+                cause radio waves to deflect off their great-circle path. This explains gray-line propagation and Pedersen rays.
+            </div>
+            
+            <div class="controls">
+                <div class="control-group">
+                    <label>
+                        <span>foF2 at Transmitter</span>
+                        <span class="value-display" id="foF2-tx-value">15.0 MHz</span>
+                    </label>
+                    <input type="range" id="foF2-tx-slider" min="2" max="25" step="0.1" value="15">
+                </div>
+                
+                <div class="control-group">
+                    <label>
+                        <span>foF2 at Reference Distance</span>
+                        <span class="value-display" id="foF2-dist-value">4.0 MHz</span>
+                    </label>
+                    <input type="range" id="foF2-dist-slider" min="2" max="25" step="0.1" value="4">
+                </div>
+                
+                <div class="control-group">
+                    <label>
+                        <span>Reference Distance</span>
+                        <span class="value-display" id="tilt-distance-value">3000 km</span>
+                    </label>
+                    <input type="range" id="tilt-distance-slider" min="200" max="8000" step="20" value="3000">
+                </div>
+                
+                <div class="control-group">
+                    <label>
+                        <span>Elevation Angle (2D)</span>
+                        <span class="value-display" id="elevation-2d-value">30°</span>
+                    </label>
+                    <input type="range" id="elevation-2d-slider" min="1" max="89" step="1" value="30">
+                </div>
+            </div>
+            
+            <div id="gradient-info" class="info-box">
+                <span class="gradient-text"></span>
+                <span id="calculating-2d" class="calculating-indicator" style="display: none;">
+                    <span class="spinner">⏳</span> Calculating...
+                </span>
+            </div>
+            
+            <h3>2D Ray Paths with Ionospheric Tilts</h3>
+            <div class="chart-container">
+                <div id="tilt-side-chart" style="width:100%;height:400px;"></div>
+            </div>
+            
+            <h3>2D Signal Loss with Tilts</h3>
+            <div class="chart-container">
+                <div id="absorption-2d-chart" style="width:100%;height:800px;"></div>
+            </div>
+            
+            <h3>Azimuth Deflection (Off-Great-Circle Propagation)</h3>
+            <div class="chart-container">
+                <div id="tilt-top-chart" style="width:100%;height:400px;"></div>
+            </div>
+        </div>
+        </div>
+        
+        <footer>
+            <p>CondX - Ionospheric HF Radio Wave Propagation Modeling</p>
+            <p>Based on Chapman layer ionosphere model with Appleton-Hartree refractive index</p>
+        </footer>
+    </div>
+    
+    <script src="main.js"></script>
+</body>
+</html>
