@@ -46,9 +46,10 @@ function chapmanLayerSingle(z, N_peak, z_peak, H) {
  * 
  * @param {number[]} z - Altitude array in km
  * @param {number} foF2 - Critical frequency of F2 layer in MHz
+ * @param {string} season - Season: 'winter', 'equinox', or 'summer' (for mid-latitude seasonal variations)
  * @returns {number[]} Total electron density at each altitude
  */
-function makeIonosphereForFoF2(z, foF2) {
+function makeIonosphereForFoF2(z, foF2, season = 'equinox') {
     // F2 layer parameters vary with foF2
     // Formula: fp (Hz) = 8.98 × sqrt(Ne) where Ne is in electrons/m³
     // So: Ne = (fp / 8.98)^2
@@ -60,6 +61,10 @@ function makeIonosphereForFoF2(z, foF2) {
     //   - No photoionization, maintained by diffusion and winds which push plasma higher
     // Daytime: hmF2 is typically LOWER (250-300 km), especially when foF2 is high
     //   - Strong photoionization produces plasma closer to peak of Chapman function
+    // Seasonal variations (mid-latitude):
+    //   - Winter: hmF2 is typically 10-20 km HIGHER than summer (due to different atmospheric composition and neutral density)
+    //   - Summer: hmF2 is typically LOWER (increased neutral density and different composition)
+    //   - Equinox: Intermediate values
     let h_F2;
     if (foF2 < 4.5) {
         // Nighttime: F1 absent, F2 peak is HIGHER due to diffusion/winds
@@ -78,6 +83,43 @@ function makeIonosphereForFoF2(z, foF2) {
         // Range: 250-300 km (lower than nighttime)
         h_F2 = 300.0 - (foF2 - 7.0) * 2.0;  // 300 km at foF2=7.0, ~274 km at foF2=20.0
         h_F2 = Math.max(250.0, Math.min(300.0, h_F2));  // Clamp to realistic daytime range
+    }
+    
+    // Apply seasonal adjustment (mid-latitude climatology)
+    // Based on ionospheric climatology: Winter has higher hmF2, Summer has lower hmF2
+    // Winter: +10 to +15 km, Summer: -10 km, Equinox: 0 km (baseline)
+    let seasonal_offset = 0.0;
+    if (foF2 >= 7.0) {  // Daytime conditions
+        if (season === 'summer') {
+            seasonal_offset = -10.0;  // Summer: lower hmF2
+        } else if (season === 'winter') {
+            seasonal_offset = 10.0;  // Winter: higher hmF2
+        }
+        // Equinox: no offset (baseline)
+    } else if (foF2 >= 4.5) {  // Transition period
+        // Reduced seasonal effect during transition
+        if (season === 'summer') {
+            seasonal_offset = -10.0;
+        } else if (season === 'winter') {
+            seasonal_offset = 15.0;
+        }
+    } else {  // Nighttime
+        // Seasonal effect at night
+        if (season === 'summer') {
+            seasonal_offset = -10.0;
+        } else if (season === 'winter') {
+            seasonal_offset = 15.0;
+        }
+    }
+    h_F2 += seasonal_offset;
+    
+    // Re-clamp after seasonal adjustment
+    if (foF2 < 4.5) {
+        h_F2 = Math.max(260.0, Math.min(360.0, h_F2));  // Nighttime range
+    } else if (foF2 < 7.0) {
+        h_F2 = Math.max(280.0, Math.min(320.0, h_F2));  // Transition range
+    } else {
+        h_F2 = Math.max(240.0, Math.min(330.0, h_F2));  // Daytime range (wider to accommodate seasonal variation)
     }
     
     // D layer strength (present during day, absent at night)
@@ -119,7 +161,7 @@ function makeIonosphereForFoF2(z, foF2) {
     // F2 layer: at night, this represents the single broadened F layer
     // Use a broader scale height at night to reflect the broadening effect
     // Nighttime F layer is broader due to recombination and diffusion
-    let F2_scale_height = 55.0;  // Default daytime scale height
+    let F2_scale_height = 55.0;  // Default daytime scale height (equinox baseline)
     if (foF2 < 4.5) {
         // Nighttime: F layer is broader (increased scale height)
         // This reflects the smoother, less peaked profile after F1 recombination
@@ -129,6 +171,18 @@ function makeIonosphereForFoF2(z, foF2) {
         const transition_factor = (foF2 - 4.5) / 2.5;
         F2_scale_height = 70.0 - transition_factor * 15.0;  // 70 km at foF2=4.5, 55 km at foF2=7.0
     }
+    
+    // Apply seasonal variation to effective F2 layer width (scale height)
+    // Treat H as an effective width parameter that shapes the electron density profile
+    // Winter: broader layer (shallower gradients) due to composition effects (O/N₂) and winds
+    // Summer: narrower layer (steeper gradients) due to stronger direct production
+    // This matches observed ionosonde behavior for practical HF propagation modeling
+    if (season === 'winter') {
+        F2_scale_height *= 1.2;  // Winter: ~20% broader (shallower gradients)
+    } else if (season === 'summer') {
+        F2_scale_height *= 0.8;  // Summer: ~20% narrower (steeper gradients)
+    }
+    // Equinox: no modification (baseline)
     
     const Ne_F2 = chapmanLayer(z, Ne_F2_peak, h_F2, F2_scale_height);
     
@@ -148,7 +202,7 @@ function makeIonosphereForFoF2(z, foF2) {
  * @param {number} tilt_distance - Reference distance for gradient in km
  * @returns {number[]} Electron density at position (x, z)
  */
-function makeTiltedIonosphere2D(z, x, foF2_at_tx, foF2_at_distance, tilt_distance) {
+function makeTiltedIonosphere2D(z, x, foF2_at_tx, foF2_at_distance, tilt_distance, season = 'equinox') {
     // Linear interpolation of foF2 with distance
     const foF2_local = foF2_at_tx + (foF2_at_distance - foF2_at_tx) * (x / tilt_distance);
     
@@ -156,7 +210,7 @@ function makeTiltedIonosphere2D(z, x, foF2_at_tx, foF2_at_distance, tilt_distanc
     const foF2_clamped = Math.max(2.0, Math.min(25.0, foF2_local));
     
     // Build ionosphere at this location
-    return makeIonosphereForFoF2(z, foF2_clamped);
+    return makeIonosphereForFoF2(z, foF2_clamped, season);
 }
 
 /**
@@ -165,9 +219,10 @@ function makeTiltedIonosphere2D(z, x, foF2_at_tx, foF2_at_distance, tilt_distanc
  * 
  * @param {number} z - Altitude in km
  * @param {number} foF2 - Critical frequency of F2 layer in MHz
+ * @param {string} season - Season: 'winter', 'equinox', or 'summer'
  * @returns {number} Electron density at altitude z
  */
-function electronDensitySingle(z, foF2) {
+function electronDensitySingle(z, foF2, season = 'equinox') {
     // F2 layer parameters
     const f_F2_Hz = foF2 * 1e6;
     const Ne_F2_peak = Math.pow(f_F2_Hz / 8.98, 2);
@@ -183,6 +238,38 @@ function electronDensitySingle(z, foF2) {
     } else {
         h_F2 = 300.0 - (foF2 - 7.0) * 2.0;
         h_F2 = Math.max(250.0, Math.min(300.0, h_F2));
+    }
+    
+    // Apply seasonal adjustment (same as in makeIonosphereForFoF2)
+    let seasonal_offset = 0.0;
+    if (foF2 >= 7.0) {  // Daytime conditions
+        if (season === 'summer') {
+            seasonal_offset = -10.0;  // Summer: lower hmF2
+        } else if (season === 'winter') {
+            seasonal_offset = 10.0;  // Winter: higher hmF2
+        }
+    } else if (foF2 >= 4.5) {  // Transition period
+        if (season === 'summer') {
+            seasonal_offset = -10.0;
+        } else if (season === 'winter') {
+            seasonal_offset = 15.0;
+        }
+    } else {  // Nighttime
+        if (season === 'summer') {
+            seasonal_offset = -10.0;
+        } else if (season === 'winter') {
+            seasonal_offset = 15.0;
+        }
+    }
+    h_F2 += seasonal_offset;
+    
+    // Re-clamp after seasonal adjustment
+    if (foF2 < 4.5) {
+        h_F2 = Math.max(260.0, Math.min(360.0, h_F2));
+    } else if (foF2 < 7.0) {
+        h_F2 = Math.max(280.0, Math.min(320.0, h_F2));
+    } else {
+        h_F2 = Math.max(240.0, Math.min(330.0, h_F2));
     }
     
     // D layer strength
@@ -212,13 +299,22 @@ function electronDensitySingle(z, foF2) {
     const Ne_E_peak = 8e10 * E_factor;
     
     // F2 scale height
-    let F2_scale_height = 55.0;
+    let F2_scale_height = 55.0;  // Default daytime scale height (equinox baseline)
     if (foF2 < 4.5) {
-        F2_scale_height = 70.0;
+        F2_scale_height = 70.0;  // Nighttime: broader profile
     } else if (foF2 < 7.0) {
         const transition_factor = (foF2 - 4.5) / 2.5;
-        F2_scale_height = 70.0 - transition_factor * 15.0;
+        F2_scale_height = 70.0 - transition_factor * 15.0;  // Transition: 70 km at foF2=4.5, 55 km at foF2=7.0
     }
+    
+    // Apply seasonal variation to effective F2 layer width (scale height)
+    // Winter: broader layer (shallower gradients), Summer: narrower layer (steeper gradients)
+    if (season === 'winter') {
+        F2_scale_height *= 1.2;  // Winter: ~20% broader
+    } else if (season === 'summer') {
+        F2_scale_height *= 0.8;  // Summer: ~20% narrower
+    }
+    // Equinox: no modification (baseline)
     
     // Calculate each layer at single point
     const Ne_D = chapmanLayerSingle(z, Ne_D_peak, 75.0, 8.0);
@@ -237,9 +333,10 @@ function electronDensitySingle(z, foF2) {
  * @param {number} foF2_at_tx - foF2 at transmitter (0 km)
  * @param {number} foF2_at_distance - foF2 at reference distance
  * @param {number} tilt_distance - Reference distance for gradient in km
+ * @param {string} season - Season: 'winter', 'equinox', or 'summer'
  * @returns {number} Electron density at position (z, x)
  */
-function electronDensity2DSingle(z, x, foF2_at_tx, foF2_at_distance, tilt_distance) {
+function electronDensity2DSingle(z, x, foF2_at_tx, foF2_at_distance, tilt_distance, season = 'equinox') {
     // Linear interpolation of foF2 with distance
     const foF2_local = foF2_at_tx + (foF2_at_distance - foF2_at_tx) * (x / tilt_distance);
     
@@ -247,7 +344,7 @@ function electronDensity2DSingle(z, x, foF2_at_tx, foF2_at_distance, tilt_distan
     const foF2_clamped = Math.max(2.0, Math.min(25.0, foF2_local));
     
     // Calculate electron density at this single point
-    return electronDensitySingle(z, foF2_clamped);
+    return electronDensitySingle(z, foF2_clamped, season);
 }
 
 /**
@@ -369,7 +466,7 @@ function traceRaySphericalWithPath(freq_MHz, elevation_deg, ionosphere_func, max
     // Ray direction tracking
     let going_up = true;
     
-    const step_km = 5.0;  // Increased from 2.0 to 5.0 to match Python performance (2.5x fewer steps)
+    const step_km = 1.0;  // Reduced to 1.0 km for better accuracy near reflection point
     const max_steps = Math.floor(max_distance_km / step_km);
     
     // Ray tracing loop
@@ -392,23 +489,35 @@ function traceRaySphericalWithPath(freq_MHz, elevation_deg, ionosphere_func, max
         };
         const n2_real = n_squared.real;
         
-        // Check if ray is reflected (n² < 0 means total reflection)
-        if (n2_real <= 0) {
-            going_up = false;
-        }
-        
         // Calculate ray angle from ray parameter conservation
         // sin(psi) = b / (n * r)
-        let sin_psi = b / (n_real * r);
+        // Match Python model: use n_real directly (no clamping) to allow proper reflection detection
+        // When n_real is very small, sin_psi becomes large, naturally triggering reflection
+        let sin_psi;
+        if (Math.abs(n_real) < 1e-8) {
+            // n_real is essentially zero (n² <= 0 case): total reflection
+            // Set sin_psi to trigger reflection
+            going_up = false;
+            sin_psi = 1.0;  // At reflection point, sin_psi = 1.0
+        } else {
+            // Normal propagation: calculate sin_psi from ray parameter
+            // This allows sin_psi to naturally approach 1.0 as n_real decreases
+            sin_psi = b / (n_real * r);
+            // If n² <= 0, the ray is reflected (but n_real might still be slightly positive)
+            if (n2_real <= 0) {
+                going_up = false;
+            }
+        }
         
-        // Check if ray reflects (sin > 1) or escapes (too high)
+        // Check if ray reflects (sin >= 1) or escapes (too high)
+        // Match Python model: check abs(sin_psi) >= 1.0
         if (Math.abs(sin_psi) >= 1.0) {
             if (z > 600 && going_up) {
                 return {distances, altitudes, status: 'escapes'};
             } else {
                 // Reflection point - start coming back down
                 going_up = false;
-                sin_psi = Math.sign(sin_psi) * 0.999;
+                sin_psi = Math.sign(sin_psi) * 0.999;  // Clamp to valid range
             }
         }
         
@@ -418,9 +527,13 @@ function traceRaySphericalWithPath(freq_MHz, elevation_deg, ionosphere_func, max
         
         const cos_psi = Math.sqrt(1 - sin_psi * sin_psi);
         
+        // Adaptive step size: use smaller steps when n is small (near reflection point)
+        // This improves accuracy where the refractive index changes rapidly
+        const adaptive_step = (n_real < 0.1 || Math.abs(sin_psi) > 0.95) ? step_km * 0.5 : step_km;
+        
         // Step along ray (with direction: up or down)
-        const dr = step_km * cos_psi * (going_up ? 1 : -1);
-        const d_theta = step_km * sin_psi / r;
+        const dr = adaptive_step * cos_psi * (going_up ? 1 : -1);
+        const d_theta = adaptive_step * sin_psi / r;
         
         r += dr;
         theta += d_theta;
@@ -470,7 +583,7 @@ function traceRayWithAbsorption(freq_MHz, elevation_deg, ionosphere_func, max_di
     // Ray direction tracking
     let going_up = true;
     
-    const step_km = 5.0;  // Increased from 2.0 to 5.0 to match Python performance (2.5x fewer steps)
+    const step_km = 1.0;  // Reduced to 1.0 km for better accuracy near reflection point
     const max_steps = Math.floor(max_distance_km / step_km);
     
     for (let step = 0; step < max_steps; step++) {
@@ -492,28 +605,39 @@ function traceRayWithAbsorption(freq_MHz, elevation_deg, ionosphere_func, max_di
         };
         const n2_real = n_squared.real;
         
-        // Check if ray is reflected
-        if (n2_real <= 0) {
-            going_up = false;
-        }
-        
         // Calculate absorption coefficient (Sen-Wyller formula)
         const alpha = (omega / (2.0 * c)) * Math.abs(n_squared.imag) / Math.max(n_real, 1e-10);
         
-        // Accumulate loss (in Nepers)
-        const path_length_m = step_km * 1000.0;
-        total_loss_nepers += alpha * path_length_m;
+        // Calculate ray angle from ray parameter conservation
+        // sin(psi) = b / (n * r)
+        // Match Python model: use n_real directly (no clamping) to allow proper reflection detection
+        // When n_real is very small, sin_psi becomes large, naturally triggering reflection
+        let sin_psi;
+        if (Math.abs(n_real) < 1e-8) {
+            // n_real is essentially zero (n² <= 0 case): total reflection
+            // Set sin_psi to trigger reflection
+            going_up = false;
+            sin_psi = 1.0;  // At reflection point, sin_psi = 1.0
+        } else {
+            // Normal propagation: calculate sin_psi from ray parameter
+            // This allows sin_psi to naturally approach 1.0 as n_real decreases
+            sin_psi = b / (n_real * r);
+            // If n² <= 0, the ray is reflected (but n_real might still be slightly positive)
+            if (n2_real <= 0) {
+                going_up = false;
+            }
+        }
         
-        // Ray geometry
-        let sin_psi = b / (n_real * r);
-        
+        // Check if ray reflects (sin >= 1) or escapes (too high)
+        // Match Python model: check abs(sin_psi) >= 1.0
         if (Math.abs(sin_psi) >= 1.0) {
             if (z > 600 && going_up) {
                 const total_loss_dB = total_loss_nepers * 8.686;
                 return {distances, altitudes, total_loss_dB, status: 'escapes'};
             } else {
+                // Reflection point - start coming back down
                 going_up = false;
-                sin_psi = Math.sign(sin_psi) * 0.999;
+                sin_psi = Math.sign(sin_psi) * 0.999;  // Clamp to valid range
             }
         }
         
@@ -524,9 +648,17 @@ function traceRayWithAbsorption(freq_MHz, elevation_deg, ionosphere_func, max_di
         
         const cos_psi = Math.sqrt(1 - sin_psi * sin_psi);
         
+        // Adaptive step size: use smaller steps when n is small (near reflection point)
+        // This improves accuracy where the refractive index changes rapidly
+        const adaptive_step = (n_real < 0.1 || Math.abs(sin_psi) > 0.95) ? step_km * 0.5 : step_km;
+        
+        // Accumulate loss (in Nepers) - use adaptive step for path length
+        const path_length_m = adaptive_step * 1000.0;
+        total_loss_nepers += alpha * path_length_m;
+        
         // Step along ray (with direction: up or down)
-        const dr = step_km * cos_psi * (going_up ? 1 : -1);
-        const d_theta = step_km * sin_psi / r;
+        const dr = adaptive_step * cos_psi * (going_up ? 1 : -1);
+        const d_theta = adaptive_step * sin_psi / r;
         
         r += dr;
         theta += d_theta;
@@ -553,9 +685,10 @@ function traceRayWithAbsorption(freq_MHz, elevation_deg, ionosphere_func, max_di
  * @param {number} foF2_at_distance - foF2 at reference distance
  * @param {number} tilt_distance - Reference distance for gradient
  * @param {number} max_distance_km - Maximum propagation distance
+ * @param {string} season - Season: 'winter', 'equinox', or 'summer'
  * @returns {Object} {distances: [], altitudes: [], azimuths: [], status: string}
  */
-function traceRay2DWithTilts(freq_MHz, elevation_deg, foF2_at_tx, foF2_at_distance, tilt_distance, max_distance_km = 10000.0) {
+function traceRay2DWithTilts(freq_MHz, elevation_deg, foF2_at_tx, foF2_at_distance, tilt_distance, max_distance_km = 10000.0, season = 'equinox') {
     const freq_Hz = freq_MHz * 1e6;
     const psi_0 = elevation_deg * Math.PI / 180.0;
     
@@ -570,7 +703,7 @@ function traceRay2DWithTilts(freq_MHz, elevation_deg, foF2_at_tx, foF2_at_distan
         let Ne = 0;
         if (z >= 0 && z <= 600) {
             // Use optimized single-point calculation instead of building full array
-            Ne = electronDensity2DSingle(z, x_dist, foF2_at_tx, foF2_at_distance, tilt_distance);
+            Ne = electronDensity2DSingle(z, x_dist, foF2_at_tx, foF2_at_distance, tilt_distance, season);
         }
         const nu = collisionFrequency(Math.max(0, z));
         return refractiveIndex(Ne, freq_Hz, nu);
@@ -588,7 +721,7 @@ function traceRay2DWithTilts(freq_MHz, elevation_deg, foF2_at_tx, foF2_at_distan
     // Ray direction tracking
     let going_up = true;
     
-    const step_km = 5.0;  // Increased from 2.0 to 5.0 to match Python performance (2.5x fewer steps)
+    const step_km = 1.0;  // Reduced to 1.0 km for better accuracy near reflection point
     const max_steps = Math.floor(max_distance_km / step_km);
     
     for (let step = 0; step < max_steps; step++) {
@@ -612,26 +745,44 @@ function traceRay2DWithTilts(freq_MHz, elevation_deg, foF2_at_tx, foF2_at_distan
         };
         const n2_real = n_squared.real;
         
-        // Check if ray is reflected
-        if (n2_real <= 0) {
-            going_up = false;
-        }
-        
         // Calculate horizontal gradient (dn/dx) for azimuth deflection
-        const dx_sample = 1.0;  // km
+        // Use smaller step size when n_real is small (near reflection) for better accuracy
+        const dx_sample = (n_real < 0.1) ? 0.5 : 1.0;  // km
         let dn_dx = 0.0;
-        if (x > 0) {
+        if (x > dx_sample) {
+            // Use centered difference for better accuracy
             const n_plus = getRefractiveIndex(z, x + dx_sample);
             const n_minus = getRefractiveIndex(z, x - dx_sample);
             dn_dx = (n_plus.real - n_minus.real) / (2 * dx_sample);
-        } else {
+        } else if (x > 0) {
+            // Near start, use forward difference
             const n_plus = getRefractiveIndex(z, x + dx_sample);
             dn_dx = (n_plus.real - n_real) / dx_sample;
         }
+        // At x = 0, gradient is zero (symmetry at transmitter)
         
-        // Ray angle from ray parameter
-        let sin_psi = b / (n_real * r);
+        // Calculate ray angle from ray parameter conservation
+        // sin(psi) = b / (n * r)
+        // Match Python model: use n_real directly (no clamping) to allow proper reflection detection
+        // When n_real is very small, sin_psi becomes large, naturally triggering reflection
+        let sin_psi;
+        if (Math.abs(n_real) < 1e-8) {
+            // n_real is essentially zero (n² <= 0 case): total reflection
+            // Set sin_psi to trigger reflection
+            going_up = false;
+            sin_psi = 1.0;  // At reflection point, sin_psi = 1.0
+        } else {
+            // Normal propagation: calculate sin_psi from ray parameter
+            // This allows sin_psi to naturally approach 1.0 as n_real decreases
+            sin_psi = b / (n_real * r);
+            // If n² <= 0, the ray is reflected (but n_real might still be slightly positive)
+            if (n2_real <= 0) {
+                going_up = false;
+            }
+        }
         
+        // Check if ray reflects (sin >= 1) or escapes (too high)
+        // Match Python model: check abs(sin_psi) >= 1.0
         if (Math.abs(sin_psi) >= 1.0) {
             if (z > 600 && going_up) {
                 return {
@@ -641,8 +792,9 @@ function traceRay2DWithTilts(freq_MHz, elevation_deg, foF2_at_tx, foF2_at_distan
                     status: 'escapes'
                 };
             } else {
+                // Reflection point - start coming back down
                 going_up = false;
-                sin_psi = Math.sign(sin_psi) * 0.999;
+                sin_psi = Math.sign(sin_psi) * 0.999;  // Clamp to valid range
             }
         }
         
@@ -657,17 +809,41 @@ function traceRay2DWithTilts(freq_MHz, elevation_deg, foF2_at_tx, foF2_at_distan
         
         const cos_psi = Math.sqrt(1 - sin_psi * sin_psi);
         
+        // Adaptive step size: use smaller steps when n is small (near reflection point)
+        // This improves accuracy where the refractive index changes rapidly
+        const adaptive_step = (n_real < 0.1 || Math.abs(sin_psi) > 0.95) ? step_km * 0.5 : step_km;
+        
         // Azimuth deflection from horizontal gradient
         // dphi/ds = -(1/n) × (dn/dx) / sin(psi)
+        // Apply smoothing near reflection to avoid numerical instability and discontinuities
+        // Near reflection (sin_psi close to 1), the azimuth deflection should smoothly approach zero
         let dphi = 0.0;
-        if (Math.abs(sin_psi) > 0.1) {  // Avoid division by zero at high angles
-            const dphi_ds = -(1.0 / n_real) * dn_dx / Math.abs(sin_psi);
-            dphi = dphi_ds * step_km;
+        const sin_psi_abs = Math.abs(sin_psi);
+        if (sin_psi_abs > 0.1 && n_real > 0.05) {
+            // Calculate base azimuth deflection
+            const dphi_ds = -(1.0 / n_real) * dn_dx / sin_psi_abs;
+            
+            // Apply smoothing factor: taper to zero as we approach reflection (sin_psi -> 1)
+            // This prevents discontinuities when sin_psi gets close to 1.0
+            let smoothing_factor = 1.0;
+            if (sin_psi_abs > 0.9) {
+                // Smoothly reduce deflection as sin_psi approaches 1.0
+                smoothing_factor = (1.0 - sin_psi_abs) / 0.1;  // Goes from 1.0 at 0.9 to 0.0 at 1.0
+                smoothing_factor = Math.max(0.0, Math.min(1.0, smoothing_factor));  // Clamp to [0, 1]
+            }
+            
+            // Also reduce deflection when n_real is small (approaching reflection from density perspective)
+            if (n_real < 0.15) {
+                const n_smoothing = (n_real - 0.05) / 0.10;  // Goes from 0.0 at 0.05 to 1.0 at 0.15
+                smoothing_factor *= Math.max(0.0, Math.min(1.0, n_smoothing));
+            }
+            
+            dphi = dphi_ds * adaptive_step * smoothing_factor;
         }
         
         // Step along ray (using spherical geometry with direction tracking)
-        const dr = step_km * cos_psi * (going_up ? 1 : -1);
-        const d_theta = step_km * sin_psi / r;  // Angular distance along Earth's surface
+        const dr = adaptive_step * cos_psi * (going_up ? 1 : -1);
+        const d_theta = adaptive_step * sin_psi / r;  // Angular distance along Earth's surface
         
         r += dr;
         theta += d_theta;
@@ -705,9 +881,10 @@ function traceRay2DWithTilts(freq_MHz, elevation_deg, foF2_at_tx, foF2_at_distan
  * @param {number} foF2_at_distance - foF2 at reference distance
  * @param {number} tilt_distance - Reference distance for gradient
  * @param {number} max_distance_km - Maximum propagation distance
+ * @param {string} season - Season: 'winter', 'equinox', or 'summer'
  * @returns {Object} {distances: [], altitudes: [], azimuths: [], total_loss_dB: number, status: string}
  */
-function traceRay2DWithAbsorption(freq_MHz, elevation_deg, foF2_at_tx, foF2_at_distance, tilt_distance, max_distance_km = 10000.0) {
+function traceRay2DWithAbsorption(freq_MHz, elevation_deg, foF2_at_tx, foF2_at_distance, tilt_distance, max_distance_km = 10000.0, season = 'equinox') {
     const freq_Hz = freq_MHz * 1e6;
     const omega = 2.0 * Math.PI * freq_Hz;
     const psi_0 = elevation_deg * Math.PI / 180.0;
@@ -724,7 +901,7 @@ function traceRay2DWithAbsorption(freq_MHz, elevation_deg, foF2_at_tx, foF2_at_d
         let Ne = 0;
         if (z >= 0 && z <= 600) {
             // Use optimized single-point calculation instead of building full array
-            Ne = electronDensity2DSingle(z, x_dist, foF2_at_tx, foF2_at_distance, tilt_distance);
+            Ne = electronDensity2DSingle(z, x_dist, foF2_at_tx, foF2_at_distance, tilt_distance, season);
         }
         const nu = collisionFrequency(Math.max(0, z));
         return refractiveIndex(Ne, freq_Hz, nu);
@@ -742,7 +919,7 @@ function traceRay2DWithAbsorption(freq_MHz, elevation_deg, foF2_at_tx, foF2_at_d
     // Ray direction tracking
     let going_up = true;
     
-    const step_km = 5.0;  // Increased from 2.0 to 5.0 to match Python performance (2.5x fewer steps)
+    const step_km = 1.0;  // Reduced to 1.0 km for better accuracy near reflection point
     const max_steps = Math.floor(max_distance_km / step_km);
     
     for (let step = 0; step < max_steps; step++) {
@@ -771,30 +948,44 @@ function traceRay2DWithAbsorption(freq_MHz, elevation_deg, foF2_at_tx, foF2_at_d
         // Calculate absorption coefficient (Sen-Wyller formula)
         const alpha = (omega / (2.0 * c)) * Math.abs(n_squared.imag) / Math.max(n_real, 1e-10);
         
-        // Accumulate loss (in Nepers)
-        const path_length_m = step_km * 1000.0;
-        total_loss_nepers += alpha * path_length_m;
-        
-        // Check if ray is reflected
-        if (n2_real <= 0) {
-            going_up = false;
-        }
-        
         // Calculate horizontal gradient (dn/dx) for azimuth deflection
-        const dx_sample = 1.0;  // km
+        // Use smaller step size when n_real is small (near reflection) for better accuracy
+        const dx_sample = (n_real < 0.1) ? 0.5 : 1.0;  // km
         let dn_dx = 0.0;
-        if (x > 0) {
+        if (x > dx_sample) {
+            // Use centered difference for better accuracy
             const n_plus = getRefractiveIndex(z, x + dx_sample);
             const n_minus = getRefractiveIndex(z, x - dx_sample);
             dn_dx = (n_plus.real - n_minus.real) / (2 * dx_sample);
-        } else {
+        } else if (x > 0) {
+            // Near start, use forward difference
             const n_plus = getRefractiveIndex(z, x + dx_sample);
             dn_dx = (n_plus.real - n_real) / dx_sample;
         }
+        // At x = 0, gradient is zero (symmetry at transmitter)
         
-        // Ray angle from ray parameter
-        let sin_psi = b / (n_real * r);
+        // Calculate ray angle from ray parameter conservation
+        // sin(psi) = b / (n * r)
+        // Match Python model: use n_real directly (no clamping) to allow proper reflection detection
+        // When n_real is very small, sin_psi becomes large, naturally triggering reflection
+        let sin_psi;
+        if (Math.abs(n_real) < 1e-8) {
+            // n_real is essentially zero (n² <= 0 case): total reflection
+            // Set sin_psi to trigger reflection
+            going_up = false;
+            sin_psi = 1.0;  // At reflection point, sin_psi = 1.0
+        } else {
+            // Normal propagation: calculate sin_psi from ray parameter
+            // This allows sin_psi to naturally approach 1.0 as n_real decreases
+            sin_psi = b / (n_real * r);
+            // If n² <= 0, the ray is reflected (but n_real might still be slightly positive)
+            if (n2_real <= 0) {
+                going_up = false;
+            }
+        }
         
+        // Check if ray reflects (sin >= 1) or escapes (too high)
+        // Match Python model: check abs(sin_psi) >= 1.0
         if (Math.abs(sin_psi) >= 1.0) {
             if (z > 600 && going_up) {
                 const total_loss_dB = total_loss_nepers * 8.686;
@@ -806,8 +997,9 @@ function traceRay2DWithAbsorption(freq_MHz, elevation_deg, foF2_at_tx, foF2_at_d
                     status: 'escapes'
                 };
             } else {
+                // Reflection point - start coming back down
                 going_up = false;
-                sin_psi = Math.sign(sin_psi) * 0.999;
+                sin_psi = Math.sign(sin_psi) * 0.999;  // Clamp to valid range
             }
         }
         
@@ -824,17 +1016,45 @@ function traceRay2DWithAbsorption(freq_MHz, elevation_deg, foF2_at_tx, foF2_at_d
         
         const cos_psi = Math.sqrt(1 - sin_psi * sin_psi);
         
+        // Adaptive step size: use smaller steps when n is small (near reflection point)
+        // This improves accuracy where the refractive index changes rapidly
+        const adaptive_step = (n_real < 0.1 || Math.abs(sin_psi) > 0.95) ? step_km * 0.5 : step_km;
+        
+        // Accumulate loss (in Nepers) - use adaptive step for path length
+        const path_length_m = adaptive_step * 1000.0;
+        total_loss_nepers += alpha * path_length_m;
+        
         // Azimuth deflection from horizontal gradient
         // dphi/ds = -(1/n) × (dn/dx) / sin(psi)
+        // Apply smoothing near reflection to avoid numerical instability and discontinuities
+        // Near reflection (sin_psi close to 1), the azimuth deflection should smoothly approach zero
         let dphi = 0.0;
-        if (Math.abs(sin_psi) > 0.1) {  // Avoid division by zero at high angles
-            const dphi_ds = -(1.0 / n_real) * dn_dx / Math.abs(sin_psi);
-            dphi = dphi_ds * step_km;
+        const sin_psi_abs = Math.abs(sin_psi);
+        if (sin_psi_abs > 0.1 && n_real > 0.05) {
+            // Calculate base azimuth deflection
+            const dphi_ds = -(1.0 / n_real) * dn_dx / sin_psi_abs;
+            
+            // Apply smoothing factor: taper to zero as we approach reflection (sin_psi -> 1)
+            // This prevents discontinuities when sin_psi gets close to 1.0
+            let smoothing_factor = 1.0;
+            if (sin_psi_abs > 0.9) {
+                // Smoothly reduce deflection as sin_psi approaches 1.0
+                smoothing_factor = (1.0 - sin_psi_abs) / 0.1;  // Goes from 1.0 at 0.9 to 0.0 at 1.0
+                smoothing_factor = Math.max(0.0, Math.min(1.0, smoothing_factor));  // Clamp to [0, 1]
+            }
+            
+            // Also reduce deflection when n_real is small (approaching reflection from density perspective)
+            if (n_real < 0.15) {
+                const n_smoothing = (n_real - 0.05) / 0.10;  // Goes from 0.0 at 0.05 to 1.0 at 0.15
+                smoothing_factor *= Math.max(0.0, Math.min(1.0, n_smoothing));
+            }
+            
+            dphi = dphi_ds * adaptive_step * smoothing_factor;
         }
         
         // Step along ray (using spherical geometry with direction tracking)
-        const dr = step_km * cos_psi * (going_up ? 1 : -1);
-        const d_theta = step_km * sin_psi / r;  // Angular distance along Earth's surface
+        const dr = adaptive_step * cos_psi * (going_up ? 1 : -1);
+        const d_theta = adaptive_step * sin_psi / r;  // Angular distance along Earth's surface
         
         r += dr;
         theta += d_theta;
