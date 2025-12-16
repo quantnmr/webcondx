@@ -4,10 +4,12 @@
 let currentState = {
     foF2_1d: 12.0,
     elevation_1d: 30,
+    season_1d: 'equinox',
     foF2_tx_2d: 15.0,
     foF2_dist_2d: 4.0,
     tilt_distance: 3000,
-    elevation_2d: 30
+    elevation_2d: 30,
+    season_2d: 'equinox'
 };
 
 /**
@@ -19,10 +21,12 @@ function init() {
     // Set initial slider values
     document.getElementById('foF2-slider').value = currentState.foF2_1d;
     document.getElementById('elevation-slider').value = currentState.elevation_1d;
+    document.getElementById('season-selector').value = currentState.season_1d;
     document.getElementById('foF2-tx-slider').value = currentState.foF2_tx_2d;
     document.getElementById('foF2-dist-slider').value = currentState.foF2_dist_2d;
     document.getElementById('tilt-distance-slider').value = currentState.tilt_distance;
     document.getElementById('elevation-2d-slider').value = currentState.elevation_2d;
+    document.getElementById('season-2d-selector').value = currentState.season_2d;
     
     // Update displays
     updateSliderDisplays();
@@ -31,10 +35,12 @@ function init() {
     // This improves performance, especially for the computationally intensive 2D model
     document.getElementById('foF2-slider').addEventListener('change', handle1DUpdate);
     document.getElementById('elevation-slider').addEventListener('change', handle1DUpdate);
+    document.getElementById('season-selector').addEventListener('change', handle1DUpdate);
     document.getElementById('foF2-tx-slider').addEventListener('change', handle2DUpdate);
     document.getElementById('foF2-dist-slider').addEventListener('change', handle2DUpdate);
     document.getElementById('tilt-distance-slider').addEventListener('change', handle2DUpdate);
     document.getElementById('elevation-2d-slider').addEventListener('change', handle2DUpdate);
+    document.getElementById('season-2d-selector').addEventListener('change', handle2DUpdate);
     
     // Also update the value displays in real-time as user drags (but don't recalculate)
     document.getElementById('foF2-slider').addEventListener('input', updateSliderDisplays);
@@ -64,9 +70,14 @@ function updateSliderDisplays() {
     const tilt_distance = parseInt(document.getElementById('tilt-distance-slider').value);
     const elevation_2d = parseInt(document.getElementById('elevation-2d-slider').value);
     
+    // Season labels mapping
+    const seasonLabels = {equinox: 'Equinox', winter: 'Winter', summer: 'Summer'};
+    
     // 1D sliders
     document.getElementById('foF2-value').textContent = foF2_1d.toFixed(1) + ' MHz';
     document.getElementById('elevation-value').textContent = elevation_1d + '°';
+    const season_1d = document.getElementById('season-selector').value;
+    document.getElementById('season-value').textContent = seasonLabels[season_1d] || 'Equinox';
     
     // Day/night indicator
     const indicator = document.getElementById('condition-indicator');
@@ -86,6 +97,8 @@ function updateSliderDisplays() {
     document.getElementById('foF2-dist-value').textContent = foF2_dist_2d.toFixed(1) + ' MHz';
     document.getElementById('tilt-distance-value').textContent = tilt_distance + ' km';
     document.getElementById('elevation-2d-value').textContent = elevation_2d + '°';
+    const season_2d = document.getElementById('season-2d-selector').value;
+    document.getElementById('season-2d-value').textContent = seasonLabels[season_2d] || 'Equinox';
     
     // Gradient display
     const gradient = ((foF2_dist_2d - foF2_tx_2d) / tilt_distance).toFixed(4);
@@ -101,6 +114,7 @@ function updateSliderDisplays() {
 function handle1DUpdate() {
     currentState.foF2_1d = parseFloat(document.getElementById('foF2-slider').value);
     currentState.elevation_1d = parseInt(document.getElementById('elevation-slider').value);
+    currentState.season_1d = document.getElementById('season-selector').value;
     
     updateSliderDisplays();
     update1DVisualizations();
@@ -114,6 +128,7 @@ function handle2DUpdate() {
     currentState.foF2_dist_2d = parseFloat(document.getElementById('foF2-dist-slider').value);
     currentState.tilt_distance = parseInt(document.getElementById('tilt-distance-slider').value);
     currentState.elevation_2d = parseInt(document.getElementById('elevation-2d-slider').value);
+    currentState.season_2d = document.getElementById('season-2d-selector').value;
     
     updateSliderDisplays();
     
@@ -135,19 +150,19 @@ function handle2DUpdate() {
  * Update all 1D visualizations
  */
 function update1DVisualizations() {
-    console.log(`Updating 1D visualizations: foF2=${currentState.foF2_1d} MHz, elevation=${currentState.elevation_1d}°`);
+    console.log(`Updating 1D visualizations: foF2=${currentState.foF2_1d} MHz, elevation=${currentState.elevation_1d}°, season=${currentState.season_1d}`);
     
-    plotElectronDensity(currentState.foF2_1d, 'density-chart');
-    plotPlasmaFrequency(currentState.foF2_1d, 'plasma-chart');
-    plotRayPaths1D(currentState.foF2_1d, currentState.elevation_1d, 'raypath-chart');
-    plotSignalLoss1D(currentState.foF2_1d, currentState.elevation_1d, 'absorption-chart');
+    plotElectronDensity(currentState.foF2_1d, 'density-chart', currentState.season_1d);
+    plotPlasmaFrequency(currentState.foF2_1d, 'plasma-chart', currentState.season_1d);
+    plotRayPaths1D(currentState.foF2_1d, currentState.elevation_1d, 'raypath-chart', currentState.season_1d);
+    plotSignalLoss1D(currentState.foF2_1d, currentState.elevation_1d, 'absorption-chart', currentState.season_1d);
 }
 
 /**
  * Update all 2D visualizations
  */
 function update2DVisualizations() {
-    console.log(`Updating 2D visualizations: foF2 ${currentState.foF2_tx_2d}→${currentState.foF2_dist_2d} MHz over ${currentState.tilt_distance} km, elevation=${currentState.elevation_2d}°`);
+    console.log(`Updating 2D visualizations: foF2 ${currentState.foF2_tx_2d}→${currentState.foF2_dist_2d} MHz over ${currentState.tilt_distance} km, elevation=${currentState.elevation_2d}°, season=${currentState.season_2d}`);
     
     plot2DTilts(
         currentState.foF2_tx_2d,
@@ -155,7 +170,8 @@ function update2DVisualizations() {
         currentState.tilt_distance,
         currentState.elevation_2d,
         'tilt-side-chart',
-        'tilt-top-chart'
+        'tilt-top-chart',
+        currentState.season_2d
     );
     
     plot2DAbsorption(
@@ -163,7 +179,8 @@ function update2DVisualizations() {
         currentState.foF2_dist_2d,
         currentState.tilt_distance,
         currentState.elevation_2d,
-        'absorption-2d-chart'
+        'absorption-2d-chart',
+        currentState.season_2d
     );
 }
 

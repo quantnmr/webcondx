@@ -6,35 +6,57 @@
  * 
  * @param {number} foF2 - Critical frequency in MHz
  * @param {string} containerId - DOM element ID for plot
+ * @param {string} season - Season: 'winter', 'equinox', or 'summer'
  */
-function plotElectronDensity(foF2, containerId = 'density-plot') {
+function plotElectronDensity(foF2, containerId = 'density-plot', season = 'equinox') {
     // Generate altitude array
     const z = [];
     for (let altitude = 0; altitude <= 600; altitude += 1) {
         z.push(altitude);
     }
     
-    // Use the same logic as makeIonosphereForFoF2 to ensure consistency
-    // F2 layer parameters
+    // Use makeIonosphereForFoF2 to get the total density with seasonal variations
+    const Ne_total = makeIonosphereForFoF2(z, foF2, season);
+    
+    // Calculate individual layers for display (using the same logic as makeIonosphereForFoF2)
+    // This is needed to show individual layer traces
     const f_F2_Hz = foF2 * 1e6;
     const Ne_F2_peak = Math.pow(f_F2_Hz / 8.98, 2);
     
-    // F2 peak altitude (hmF2): follows ionospheric climatology
-    // Nighttime: hmF2 is HIGHER (260-350 km), especially when foF2 is low
-    // Daytime: hmF2 is LOWER (250-300 km), especially when foF2 is high
+    // F2 peak altitude with seasonal adjustment
     let h_F2;
     if (foF2 < 4.5) {
-        // Nighttime: F1 absent, F2 peak is HIGHER due to diffusion/winds
-        h_F2 = 260.0 + (4.5 - foF2) * 36.0;  // 260 km at foF2=4.5, 350 km at foF2=2.0
+        h_F2 = 260.0 + (4.5 - foF2) * 36.0;
         h_F2 = Math.max(260.0, Math.min(350.0, h_F2));
     } else if (foF2 < 7.0) {
-        // Transition period
         const transition_factor = (foF2 - 4.5) / 2.5;
-        h_F2 = 300.0 - transition_factor * 20.0;  // 300 km at foF2=4.5, 280 km at foF2=7.0
+        h_F2 = 300.0 - transition_factor * 20.0;
     } else {
-        // Daytime: F2 peak is LOWER due to photoionization
-        h_F2 = 300.0 - (foF2 - 7.0) * 2.0;  // 300 km at foF2=7.0, ~274 km at foF2=20.0
+        h_F2 = 300.0 - (foF2 - 7.0) * 2.0;
         h_F2 = Math.max(250.0, Math.min(300.0, h_F2));
+    }
+    
+    // Apply seasonal adjustment
+    let seasonal_offset = 0.0;
+    if (foF2 >= 7.0) {
+        if (season === 'summer') seasonal_offset = -10.0;
+        else if (season === 'winter') seasonal_offset = 10.0;
+    } else if (foF2 >= 4.5) {
+        if (season === 'summer') seasonal_offset = -10.0;
+        else if (season === 'winter') seasonal_offset = 15.0;
+    } else {
+        if (season === 'summer') seasonal_offset = -10.0;
+        else if (season === 'winter') seasonal_offset = 15.0;
+    }
+    h_F2 += seasonal_offset;
+    
+    // Re-clamp after seasonal adjustment
+    if (foF2 < 4.5) {
+        h_F2 = Math.max(260.0, Math.min(360.0, h_F2));
+    } else if (foF2 < 7.0) {
+        h_F2 = Math.max(280.0, Math.min(320.0, h_F2));
+    } else {
+        h_F2 = Math.max(240.0, Math.min(330.0, h_F2));
     }
     
     // D layer strength
@@ -48,28 +70,35 @@ function plotElectronDensity(foF2, containerId = 'density-plot') {
     }
     const Ne_D_peak = 1.5e9 * D_factor;
     
-    // F1 layer strength (daytime only - absent at night)
+    // F1 layer strength
     let F1_factor;
     if (foF2 < 4.5) {
-        F1_factor = 0.0;  // Night: F1 layer absent (recombines, F2 becomes single F layer)
+        F1_factor = 0.0;
     } else if (foF2 < 7.0) {
         F1_factor = (foF2 - 4.5) / 2.5;
     } else {
         F1_factor = 1.0;
     }
-    const Ne_F1_peak = 6e11 * F1_factor;  // Doubled from 3e11 to 6e11
+    const Ne_F1_peak = 6e11 * F1_factor;
     
     // E layer strength
     const E_factor = 0.5 + 0.5 * Math.min(1.0, foF2 / 12.0);
     const Ne_E_peak = 8e10 * E_factor;
     
-    // F2 scale height: broader at night
+    // F2 scale height with seasonal variation
     let F2_scale_height = 55.0;
     if (foF2 < 4.5) {
-        F2_scale_height = 70.0;  // Broader profile at night
+        F2_scale_height = 70.0;
     } else if (foF2 < 7.0) {
         const transition_factor = (foF2 - 4.5) / 2.5;
         F2_scale_height = 70.0 - transition_factor * 15.0;
+    }
+    
+    // Apply seasonal variation to scale height
+    if (season === 'winter') {
+        F2_scale_height *= 1.2;
+    } else if (season === 'summer') {
+        F2_scale_height *= 0.8;
     }
     
     // Generate layer profiles
@@ -77,9 +106,6 @@ function plotElectronDensity(foF2, containerId = 'density-plot') {
     const Ne_E = chapmanLayer(z, Ne_E_peak, 110.0, 15.0);
     const Ne_F1 = chapmanLayer(z, Ne_F1_peak, 190.0, 30.0);
     const Ne_F2 = chapmanLayer(z, Ne_F2_peak, h_F2, F2_scale_height);
-    
-    // Total density
-    const Ne_total = z.map((_, i) => Ne_D[i] + Ne_E[i] + Ne_F1[i] + Ne_F2[i]);
     
     // Convert to units of 10⁹ electrons/m³ for better readability
     const Ne_D_scaled = Ne_D.map(n => n / 1e9);
@@ -165,14 +191,15 @@ function plotElectronDensity(foF2, containerId = 'density-plot') {
  * 
  * @param {number} foF2 - Critical frequency in MHz
  * @param {string} containerId - DOM element ID for plot
+ * @param {string} season - Season: 'winter', 'equinox', or 'summer'
  */
-function plotPlasmaFrequency(foF2, containerId = 'plasma-plot') {
+function plotPlasmaFrequency(foF2, containerId = 'plasma-plot', season = 'equinox') {
     const z = [];
     for (let altitude = 0; altitude <= 600; altitude += 1) {
         z.push(altitude);
     }
     
-    const Ne = makeIonosphereForFoF2(z, foF2);
+    const Ne = makeIonosphereForFoF2(z, foF2, season);
     const fp = Ne.map(n => plasmaFrequencyFromNe(n) / 1e6);  // Convert to MHz
     
     const trace = {
@@ -216,15 +243,16 @@ function plotPlasmaFrequency(foF2, containerId = 'plasma-plot') {
  * @param {number} foF2 - Critical frequency in MHz
  * @param {number} elevation - Launch elevation angle in degrees
  * @param {string} containerId - DOM element ID for plot
+ * @param {string} season - Season: 'winter', 'equinox', or 'summer'
  */
-function plotRayPaths1D(foF2, elevation, containerId = 'ray-plot-1d') {
+function plotRayPaths1D(foF2, elevation, containerId = 'ray-plot-1d', season = 'equinox') {
     const frequencies = [1.8, 3.5, 5.3, 7.0, 10.1, 14.0, 18.068, 21.0, 24.89, 28.0];
     const colors = ['#1f77b4', '#ff7f0e', '#2ca02c', '#d62728', '#9467bd', 
                     '#8c564b', '#e377c2', '#7f7f7f', '#bcbd22', '#17becf'];
     
     const ionosphere_func = (z) => {
         const z_arr = [z];
-        return makeIonosphereForFoF2(z_arr, foF2)[0];
+        return makeIonosphereForFoF2(z_arr, foF2, season)[0];
     };
     
     const traces = [];
@@ -287,13 +315,14 @@ function plotRayPaths1D(foF2, elevation, containerId = 'ray-plot-1d') {
  * @param {number} foF2 - Critical frequency in MHz
  * @param {number} elevation - Launch elevation angle in degrees
  * @param {string} containerId - DOM element ID for plot
+ * @param {string} season - Season: 'winter', 'equinox', or 'summer'
  */
-function plotSignalLoss1D(foF2, elevation, containerId = 'absorption-chart') {
+function plotSignalLoss1D(foF2, elevation, containerId = 'absorption-chart', season = 'equinox') {
     const frequencies = [1.8, 3.5, 5.3, 7.0, 10.1, 14.0, 18.068, 21.0, 24.89, 28.0];
     
     const ionosphere_func = (z) => {
         const z_arr = [z];
-        return makeIonosphereForFoF2(z_arr, foF2)[0];
+        return makeIonosphereForFoF2(z_arr, foF2, season)[0];
     };
     
     const path_traces = [];
@@ -416,9 +445,10 @@ function plotSignalLoss1D(foF2, elevation, containerId = 'absorption-chart') {
  * @param {number} elevation - Launch elevation angle in degrees
  * @param {string} sideContainerId - DOM element ID for side view
  * @param {string} topContainerId - DOM element ID for top view
+ * @param {string} season - Season: 'winter', 'equinox', or 'summer'
  */
 function plot2DTilts(foF2_tx, foF2_dist, tilt_distance, elevation, 
-                     sideContainerId = 'tilt-side-view', topContainerId = 'tilt-top-view') {
+                     sideContainerId = 'tilt-side-view', topContainerId = 'tilt-top-view', season = 'equinox') {
     const frequencies = [1.8, 3.5, 5.3, 7.0, 10.1, 14.0, 18.068, 21.0, 24.89, 28.0];
     const colors = ['#1f77b4', '#ff7f0e', '#2ca02c', '#d62728', '#9467bd', 
                     '#8c564b', '#e377c2', '#7f7f7f', '#bcbd22', '#17becf'];
@@ -428,7 +458,7 @@ function plot2DTilts(foF2_tx, foF2_dist, tilt_distance, elevation,
     let max_distance = 0;
     
     frequencies.forEach((freq, i) => {
-        const result = traceRay2DWithTilts(freq, elevation, foF2_tx, foF2_dist, tilt_distance);
+        const result = traceRay2DWithTilts(freq, elevation, foF2_tx, foF2_dist, tilt_distance, 10000.0, season);
         
         // Truncate ray path at 400 km - stop plotting when altitude exceeds 400 km
         const truncated_distances = [];
@@ -530,9 +560,10 @@ function plot2DTilts(foF2_tx, foF2_dist, tilt_distance, elevation,
  * @param {number} tilt_distance - Reference distance in km
  * @param {number} elevation - Launch elevation angle in degrees
  * @param {string} containerId - DOM element ID for plot
+ * @param {string} season - Season: 'winter', 'equinox', or 'summer'
  */
 function plot2DAbsorption(foF2_tx, foF2_dist, tilt_distance, elevation,
-                          containerId = 'absorption-2d-chart') {
+                          containerId = 'absorption-2d-chart', season = 'equinox') {
     const frequencies = [1.8, 3.5, 5.3, 7.0, 10.1, 14.0, 18.068, 21.0, 24.89, 28.0];
     
     const path_traces = [];
@@ -540,7 +571,7 @@ function plot2DAbsorption(foF2_tx, foF2_dist, tilt_distance, elevation,
     let max_distance = 0;
     
     frequencies.forEach((freq, i) => {
-        const result = traceRay2DWithAbsorption(freq, elevation, foF2_tx, foF2_dist, tilt_distance);
+        const result = traceRay2DWithAbsorption(freq, elevation, foF2_tx, foF2_dist, tilt_distance, 10000.0, season);
         const loss = result.total_loss_dB;
         
         loss_data.push({freq, loss, status: result.status});

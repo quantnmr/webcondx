@@ -182,6 +182,17 @@
                     </label>
                     <input type="range" id="foF2-slider" min="2" max="25" step="0.1" value="12">
                 </div>
+                <div class="control-group">
+                    <label>
+                        <span>Season</span>
+                        <span class="value-display" id="season-value">Equinox</span>
+                    </label>
+                    <select id="season-selector" style="width: 100%; padding: 8px; font-size: 14px; border: 1px solid #ddd; border-radius: 4px;">
+                        <option value="equinox">Equinox (Baseline)</option>
+                        <option value="winter">Winter (Higher hmF2, Broader Layer)</option>
+                        <option value="summer">Summer (Lower hmF2, Narrower Layer)</option>
+                    </select>
+                </div>
             </div>
             
             <div id="condition-indicator" class="condition-indicator"></div>
@@ -259,6 +270,18 @@
                         <span class="value-display" id="elevation-2d-value">30°</span>
                     </label>
                     <input type="range" id="elevation-2d-slider" min="1" max="89" step="1" value="30">
+                </div>
+                
+                <div class="control-group">
+                    <label>
+                        <span>Season (2D)</span>
+                        <span class="value-display" id="season-2d-value">Equinox</span>
+                    </label>
+                    <select id="season-2d-selector" style="width: 100%; padding: 8px; font-size: 14px; border: 1px solid #ddd; border-radius: 4px;">
+                        <option value="equinox">Equinox (Baseline)</option>
+                        <option value="winter">Winter (Higher hmF2, Broader Layer)</option>
+                        <option value="summer">Summer (Lower hmF2, Narrower Layer)</option>
+                    </select>
                 </div>
             </div>
             
