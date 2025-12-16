@@ -285,7 +285,7 @@ function plotRayPaths1D(foF2, elevation, containerId = 'ray-plot-1d', season = '
             type: 'scatter',
             mode: 'lines',
             name: `${freq.toFixed(1)} MHz (${result.status})`,
-            line: {color: colors[i], width: 2}
+            line: {color: colors[i], width: 4}
         });
     });
     
@@ -366,7 +366,7 @@ function plotSignalLoss1D(foF2, elevation, containerId = 'absorption-chart', sea
             type: 'scatter',
             mode: 'lines',
             name: `${freq.toFixed(1)} MHz (${loss.toFixed(1)} dB)`,
-            line: {color: color, width: 2},
+            line: {color: color, width: 4},
             xaxis: 'x',
             yaxis: 'y'
         });
@@ -486,7 +486,7 @@ function plot2DTilts(foF2_tx, foF2_dist, tilt_distance, elevation,
             type: 'scatter',
             mode: 'lines',
             name: `${freq.toFixed(1)} MHz (${result.status})`,
-            line: {color: colors[i], width: 2}
+            line: {color: colors[i], width: 4}
         });
         
         top_traces.push({
@@ -495,7 +495,7 @@ function plot2DTilts(foF2_tx, foF2_dist, tilt_distance, elevation,
             type: 'scatter',
             mode: 'lines',
             name: `${freq.toFixed(1)} MHz`,
-            line: {color: colors[i], width: 2}
+            line: {color: colors[i], width: 4}
         });
     });
     
@@ -606,7 +606,7 @@ function plot2DAbsorption(foF2_tx, foF2_dist, tilt_distance, elevation,
             type: 'scatter',
             mode: 'lines',
             name: `${freq.toFixed(1)} MHz (${loss.toFixed(1)} dB)`,
-            line: {color: color, width: 2},
+            line: {color: color, width: 4},
             xaxis: 'x',
             yaxis: 'y'
         });
