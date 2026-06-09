@@ -6,7 +6,7 @@ This guide will help you deploy the `web-condx` directory to GitHub Pages.
 
 - A GitHub account
 - Git installed on your computer
-- The repository should be named something like `condx` (not `quantnmr.github.io`)
+- The repository is [quantnmr/webcondx](https://github.com/quantnmr/webcondx) (not `quantnmr.github.io`)
 
 ## Steps
 
@@ -22,14 +22,14 @@ git commit -m "Initial commit with web-condx"
 ### 2. Create GitHub Repository
 
 1. Go to [GitHub](https://github.com) and create a new repository
-2. Name it `condx` (or whatever you prefer)
+2. Name it `webcondx` (or whatever you prefer)
 3. **Don't** initialize it with a README (you already have files)
 
 ### 3. Connect and Push
 
 ```bash
 # Add your GitHub repository as remote
-git remote add origin https://github.com/quantnmr/condx.git
+git remote add origin https://github.com/quantnmr/webcondx.git
 
 # Push to GitHub
 git branch -M main
@@ -46,9 +46,11 @@ git push -u origin main
 ### 5. Access Your Site
 
 After the workflow runs (check the **Actions** tab), your site will be available at:
-- `https://quantnmr.github.io/condx/`
+- `https://quantnmr.github.io/webcondx/`
 
-(Replace `quantnmr` with your GitHub username and `condx` with your repository name)
+(Replace `quantnmr` with your GitHub username and `webcondx` with your repository name)
+
+**Note:** GitHub Pages URLs are case-sensitive. The separate Marimo notebook repo is deployed at `https://quantnmr.github.io/CONDX/` (uppercase), not `/condx/`.
 
 ## Alternative: Deploy to quantnmr.github.io
 

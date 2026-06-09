@@ -4,7 +4,7 @@ Interactive web application for modeling High Frequency (HF) radio wave propagat
 
 ## Live Demo
 
-Visit the live site at: [https://quantnmr.github.io/condx/](https://quantnmr.github.io/condx/)
+Visit the live site at: [https://quantnmr.github.io/webcondx/](https://quantnmr.github.io/webcondx/)
 
 ## Features
 

@@ -44,6 +44,8 @@ Then open http://localhost:8000 in your browser.
 3. Enable GitHub Pages in repo settings
 4. Your tool will be live at https://yourusername.github.io/repo-name/
 
+For this project, the live site is: https://quantnmr.github.io/webcondx/
+
 ## Features
 
 ### Part 1: 1D Ionospheric Model
